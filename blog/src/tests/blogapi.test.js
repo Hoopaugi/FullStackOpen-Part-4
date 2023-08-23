@@ -1,3 +1,4 @@
+const bcrypt = require('bcrypt')
 const mongoose = require('mongoose')
 const supertest = require('supertest')
 const app = require('../app')
@@ -5,15 +6,38 @@ const helper = require('./test_helper')
 const api = supertest(app)
 
 const Blog = require('../app/models/blog')
+const User = require('../app/models/user')
+
+let login = null
 
 beforeEach(async () => {
+  await User.deleteMany({})
+
+  const initialUser = helper.initialUsers[0]
+
+  const passwordHash = await bcrypt.hash(initialUser.password, 10)
+  const user = new User({ ...initialUser, passwordHash: passwordHash })
+
+  await user.save()
+
   await Blog.deleteMany({})
 
   for (let blog of helper.initialBlogs) {
-    let newBlog = new Blog(blog)
+    let newBlog = new Blog({ ...blog, user: user.id })
 
     await newBlog.save()
   }
+
+  const request = await api
+    .post('/api/login')
+    .send({ ...initialUser })
+    .expect(200)
+    .expect('Content-Type', /application\/json/)
+
+  expect(request.body.token).toBeDefined()
+  expect(request.body.username).toBe(initialUser.username)
+
+  login = request.body
 })
 
 describe('when there is initially some blogs saved', () => {
@@ -50,7 +74,9 @@ describe('viewing a specific blog', () => {
       .expect(200)
       .expect('Content-Type', /application\/json/)
 
-    expect(resultBlog.body).toEqual(blogToView)
+    expect(resultBlog.body.title).toEqual(blogToView.title)
+    expect(resultBlog.body.author).toEqual(blogToView.author)
+    expect(resultBlog.body.url).toEqual(blogToView.url)
   })
 
   test('fails with statuscode 404 if blog does not exist', async () => {
@@ -81,6 +107,7 @@ describe('addition of a new blog', () => {
 
     await api
       .post('/api/blogs')
+      .set({ Authorization: `Bearer ${login.token}` })
       .send(newBlog)
       .expect(201)
       .expect('Content-Type', /application\/json/)
@@ -102,6 +129,7 @@ describe('addition of a new blog', () => {
 
     await api
       .post('/api/blogs')
+      .set({ Authorization: `Bearer ${login.token}` })
       .send(newBlog)
       .expect(400)
 
@@ -119,6 +147,7 @@ describe('addition of a new blog', () => {
 
     await api
       .post('/api/blogs')
+      .set({ Authorization: `Bearer ${login.token}` })
       .send(newBlog)
       .expect(400)
 
@@ -136,6 +165,7 @@ describe('addition of a new blog', () => {
 
     const request = await api
       .post('/api/blogs')
+      .set({ Authorization: `Bearer ${login.token}` })
       .send(newBlog)
       .expect(201)
       .expect('Content-Type', /application\/json/)
