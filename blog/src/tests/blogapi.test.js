@@ -120,6 +120,25 @@ describe('addition of a new blog', () => {
     expect(titles).toContain('Introducing the React Mega-Tutorial')
   })
 
+  test('fails without authorizaation', async () => {
+    const newBlog = {
+      title: 'Introducing the React Mega-Tutorial',
+      author: 'Miguel Grinberg',
+      url: 'https://blog.miguelgrinberg.com/post/introducing-the-react-mega-tutorial',
+      likes: 5
+    }
+
+    await api
+      .post('/api/blogs')
+      .send(newBlog)
+      .expect(401)
+      .expect('Content-Type', /application\/json/)
+
+    const blogsAtEnd = await helper.blogsInDb()
+
+    expect(blogsAtEnd).toHaveLength(helper.initialBlogs.length)
+  })
+
   test('fails with missing title', async () => {
     const newBlog = {
       author: 'Miguel Grinberg',

@@ -1,9 +1,10 @@
 POST http://localhost:5000/api/blogs
 content-type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3R1c2VyIiwiaWQiOiI2NGU1ZDRmNzEyZmNlNzE0MDc0MDczMzQiLCJpYXQiOjE2OTI3ODQwODAsImV4cCI6MTY5Mjc4NzY4MH0.hcI8pWtV7Cwmc7IPp4A-VyVZZyvfgrXWcBASU94uoPE
 
 {
   "title": "Test title",
   "author": "Test author",
   "url": "Test url",
-  "likes": 0
+  "user": "64e5d4f712fce71407407334"
 }
