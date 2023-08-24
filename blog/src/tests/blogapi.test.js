@@ -8,36 +8,38 @@ const api = supertest(app)
 const Blog = require('../app/models/blog')
 const User = require('../app/models/user')
 
-let login = null
+let initialUsers = []
 
 beforeEach(async () => {
+  initialUsers = []
+
   await User.deleteMany({})
 
-  const initialUser = helper.initialUsers[0]
+  for (let user of helper.initialUsers) {
+    let passwordHash = await bcrypt.hash(user.password, 10)
+    let newUser = new User({ ...user, passwordHash: passwordHash })
 
-  const passwordHash = await bcrypt.hash(initialUser.password, 10)
-  const user = new User({ ...initialUser, passwordHash: passwordHash })
+    let savedUser = await newUser.save()
 
-  await user.save()
+    let request = await api
+      .post('/api/login')
+      .send({ ...user })
+      .expect(200)
+      .expect('Content-Type', /application\/json/)
+
+    expect(request.body.token).toBeDefined()
+    expect(request.body.username).toBe(user.username)
+
+    initialUsers = initialUsers.concat({ ...savedUser.toJSON(), token: request.body.token })
+  }
 
   await Blog.deleteMany({})
 
   for (let blog of helper.initialBlogs) {
-    let newBlog = new Blog({ ...blog, user: user.id })
+    let newBlog = new Blog({ ...blog, user: initialUsers[0].id })
 
     await newBlog.save()
   }
-
-  const request = await api
-    .post('/api/login')
-    .send({ ...initialUser })
-    .expect(200)
-    .expect('Content-Type', /application\/json/)
-
-  expect(request.body.token).toBeDefined()
-  expect(request.body.username).toBe(initialUser.username)
-
-  login = request.body
 })
 
 describe('when there is initially some blogs saved', () => {
@@ -107,7 +109,7 @@ describe('addition of a new blog', () => {
 
     await api
       .post('/api/blogs')
-      .set({ Authorization: `Bearer ${login.token}` })
+      .set({ Authorization: `Bearer ${initialUsers[0].token}` })
       .send(newBlog)
       .expect(201)
       .expect('Content-Type', /application\/json/)
@@ -148,7 +150,7 @@ describe('addition of a new blog', () => {
 
     await api
       .post('/api/blogs')
-      .set({ Authorization: `Bearer ${login.token}` })
+      .set({ Authorization: `Bearer ${initialUsers[0].token}` })
       .send(newBlog)
       .expect(400)
 
@@ -166,7 +168,7 @@ describe('addition of a new blog', () => {
 
     await api
       .post('/api/blogs')
-      .set({ Authorization: `Bearer ${login.token}` })
+      .set({ Authorization: `Bearer ${initialUsers[0].token}` })
       .send(newBlog)
       .expect(400)
 
@@ -184,7 +186,7 @@ describe('addition of a new blog', () => {
 
     const request = await api
       .post('/api/blogs')
-      .set({ Authorization: `Bearer ${login.token}` })
+      .set({ Authorization: `Bearer ${initialUsers[0].token}` })
       .send(newBlog)
       .expect(201)
       .expect('Content-Type', /application\/json/)
@@ -200,6 +202,7 @@ describe('deletion of a blog', () => {
 
     await api
       .delete(`/api/blogs/${blogToDelete.id}`)
+      .set({ Authorization: `Bearer ${initialUsers[0].token}` })
       .expect(204)
 
     const blogsAtEnd = await helper.blogsInDb()
@@ -212,6 +215,36 @@ describe('deletion of a blog', () => {
 
     expect(titles).not.toContain(blogToDelete.title)
   })
+
+  test('fails with invalid authorization', async () => {
+    const blogsAtStart = await helper.blogsInDb()
+    const blogToDelete = blogsAtStart[0]
+
+    await api
+      .delete(`/api/blogs/${blogToDelete.id}`)
+      .expect(401)
+
+    const blogsAtEnd = await helper.blogsInDb()
+
+    expect(blogsAtEnd).toHaveLength(helper.initialBlogs.length)
+  })
+
+  test('fails if not owner', async () => {
+    const blogsAtStart = await helper.blogsInDb()
+    const blogToDelete = blogsAtStart[0]
+
+    const result = await api
+      .delete(`/api/blogs/${blogToDelete.id}`)
+      .set({ Authorization: `Bearer ${initialUsers[1].token}` })
+      .expect(401)
+
+
+    expect(result.body.error).toContain('not owner')
+
+    const blogsAtEnd = await helper.blogsInDb()
+
+    expect(blogsAtEnd).toHaveLength(helper.initialBlogs.length)
+  })
 })
 
 describe('updating a blog', () => {
@@ -223,6 +256,7 @@ describe('updating a blog', () => {
 
     const updatedBlog = await api
       .put(`/api/blogs/${blogToUpdate.id}`)
+      .set({ Authorization: `Bearer ${initialUsers[0].token}` })
       .send(blogToUpdate)
       .expect(200)
 
@@ -255,8 +289,6 @@ test('blog identifier is id and not _id', async () => {
   expect(resultBlog.body.id).toBeDefined()
   expect(resultBlog.body._id).not.toBeDefined()
 })
-
-
 
 afterAll(async () => {
   await mongoose.connection.close()

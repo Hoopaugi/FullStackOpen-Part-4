@@ -53,6 +53,10 @@ const initialUsers = [
     username: 'root',
     name: 'root',
     password: 'password'
+  }, {
+    username: 'root2',
+    name: 'root2',
+    password: 'password'
   }
 ]
 

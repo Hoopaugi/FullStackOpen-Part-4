@@ -97,6 +97,8 @@ describe('when there is initially one user in db', () => {
 
     expect(result.body.error).toContain('invalid password')
 
+    expect(result.body.error).toContain('invalid password')
+
     const usersAtEnd = await helper.usersInDb()
     expect(usersAtEnd).toEqual(usersAtStart)
   })
